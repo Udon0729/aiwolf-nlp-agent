@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 from aiwolf_nlp_common.packet import Info, Packet, Request, Role, Setting, Status, Talk
 
+from llm.client import BaseLLMClient
+from llm.factory import LLMFactory
 from utils.agent_logger import AgentLogger
 from utils.stoppable_thread import StoppableThread
 
@@ -47,6 +49,7 @@ class Agent:
         self.config = config
         self.agent_name = name
         self.agent_logger = AgentLogger(config, name, game_id)
+        self.llm: BaseLLMClient | None = LLMFactory.create(config)
         self.request: Request | None = None
         self.info: Info | None = None
         self.setting: Setting | None = None
