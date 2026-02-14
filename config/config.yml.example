@@ -11,6 +11,11 @@ agent:
 path:
   random_talk: ./resource/2019071_44011_AIWolfTalkLogs.txt
 
+llm:
+  enable: false
+  model: "anthropic:claude-sonnet-4-5-20250929"
+  # 環境変数 ANTHROPIC_API_KEY / OPENAI_API_KEY 等でAPIキーを設定
+
 log:
   console_output: true
   file_output: true

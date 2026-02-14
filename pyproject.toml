@@ -6,6 +6,7 @@ dependencies = [
     "python-ulid>=3.0.0",
     "pyyaml>=6.0.2",
     "requests>=2.32.4",
+    "pydantic-ai>=0.1.0",
 ]
 requires-python = ">=3.11"
 authors = [
@@ -47,3 +48,8 @@ docstring-code-format = true
 select = ["ALL"]
 unfixable = ["F401", "F841"]
 pydocstyle.convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"src/llm/prompts.py" = ["RUF001"]
+"src/llm/talk_agent.py" = ["RUF001"]
+"src/llm/action_agent.py" = ["RUF001"]
