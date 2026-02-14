@@ -31,6 +31,8 @@ class GameContext:
     vote_list: list[dict[str, str | int]]
     strategy_memo: str
     suspicion: dict[str, str]
+    emotional_state: str
+    relationships: dict[str, str]
     remain_count: int | None
     remain_length: int | None
 
@@ -44,6 +46,8 @@ class LLMState:
 
     strategy_memo: str = ""
     suspicion: dict[str, str] = field(default_factory=dict)  # pyright: ignore[reportUnknownVariableType]
+    emotional_state: str = ""
+    relationships: dict[str, str] = field(default_factory=dict)  # pyright: ignore[reportUnknownVariableType]
     talk_message_history: list[dict[str, str]] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
     whisper_message_history: list[dict[str, str]] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
     current_day: int = -1
@@ -72,6 +76,8 @@ class LLMState:
         """
         self.strategy_memo = ""
         self.suspicion = {}
+        self.emotional_state = ""
+        self.relationships = {}
         self.talk_message_history = []
         self.whisper_message_history = []
         self.current_day = -1

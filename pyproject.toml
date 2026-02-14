@@ -50,6 +50,7 @@ unfixable = ["F401", "F841"]
 pydocstyle.convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"src/llm/prompts.py" = ["RUF001"]
+"src/llm/prompts.py" = ["RUF001", "RUF003"]
 "src/llm/talk_agent.py" = ["RUF001"]
 "src/llm/action_agent.py" = ["RUF001"]
+"src/llm/models.py" = ["RUF001"]

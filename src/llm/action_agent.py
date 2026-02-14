@@ -36,26 +36,46 @@ def game_state_prompt(ctx: RunContext[GameContext]) -> str:
     """
     deps = ctx.deps
     lines = [
-        f"【あなたの情報】名前: {deps.agent_name} / 役職: {deps.role} / プロフィール: {deps.profile}",
-        f"【現在の状況】{deps.day}日目",
-        f"【生存者】{', '.join(deps.alive_agents)}",
+        "=== ゲーム状態 ===",
+        f"名前: {deps.agent_name} / 役職: {deps.role} / {deps.day}日目",
+        f"生存者: {', '.join(deps.alive_agents)}",
     ]
     if deps.divine_results:
         results = [f"  Day{r['day']}: {r['target']} → {r['result']}" for r in deps.divine_results]
-        lines.append("【占い結果】\n" + "\n".join(results))
+        lines.append("占い結果:\n" + "\n".join(results))
     if deps.medium_results:
         results = [f"  Day{r['day']}: {r['target']} → {r['result']}" for r in deps.medium_results]
-        lines.append("【霊媒結果】\n" + "\n".join(results))
+        lines.append("霊媒結果:\n" + "\n".join(results))
     if deps.executed_agent:
-        lines.append(f"【前日の処刑】{deps.executed_agent}")
+        lines.append(f"前日の処刑: {deps.executed_agent}")
     if deps.attacked_agent:
-        lines.append(f"【前夜の襲撃】{deps.attacked_agent}")
-    if deps.strategy_memo:
-        lines.append(f"【戦略メモ】\n{deps.strategy_memo}")
-    if deps.suspicion:
-        suspicion_lines = [f"  {name}: {eval_}" for name, eval_ in deps.suspicion.items()]
-        lines.append("【各プレイヤー評価】\n" + "\n".join(suspicion_lines))
+        lines.append(f"前夜の襲撃: {deps.attacked_agent}")
     return "\n".join(lines)
+
+
+@action_agent.system_prompt
+def strategy_and_emotional_context(ctx: RunContext[GameContext]) -> str:
+    """Provide strategy memo, suspicion, and emotional/relationship state.
+
+    戦略メモ・各プレイヤー評価・感情状態・関係性を提供する.
+    """
+    lines: list[str] = []
+    if ctx.deps.strategy_memo:
+        lines.append(f"=== 戦略メモ ===\n{ctx.deps.strategy_memo}")
+    if ctx.deps.suspicion:
+        lines.append("=== 各プレイヤー評価 ===")
+        for name, eval_ in ctx.deps.suspicion.items():
+            lines.append(f"  {name}: {eval_}")
+    if ctx.deps.emotional_state:
+        lines.append(f"=== 現在の感情状態 ===\n{ctx.deps.emotional_state}")
+    if ctx.deps.relationships:
+        lines.append("=== 他プレイヤーとの関係性 ===")
+        for agent, rel in ctx.deps.relationships.items():
+            lines.append(f"  {agent}: {rel}")
+    return "\n".join(lines)
+
+
+# === ツール群 ===
 
 
 @action_agent.tool
@@ -93,9 +113,9 @@ def search_talks_by_keyword(ctx: RunContext[GameContext], keyword: str) -> str:
     """
     matches = [t for t in ctx.deps.talk_history if keyword in str(t.get("text", ""))]
     if not matches:
-        return f"'{keyword}' を含む発言は見つかりませんでした。"
+        return f"「{keyword}」を含む発言は見つかりませんでした。"
     lines = [f"Day{t['day']} {t['agent']}: {t['text']}" for t in matches]
-    return f"'{keyword}' を含む発言:\n" + "\n".join(lines)
+    return f"「{keyword}」を含む発言:\n" + "\n".join(lines)
 
 
 @action_agent.tool
@@ -161,6 +181,7 @@ def get_action_user_prompt(action_type: str, role: str) -> str:
         User prompt string / ユーザープロンプト文字列
     """
     if action_type == "vote":
-        return VOTE_PROMPT
+        role_prompts = ROLE_ACTION_PROMPTS.get(role, {})
+        return role_prompts.get("vote", VOTE_PROMPT)
     role_prompts = ROLE_ACTION_PROMPTS.get(role, {})
     return role_prompts.get(action_type, f"{action_type}の対象を選んでください。")

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import random
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
@@ -215,9 +216,67 @@ class Agent:
             vote_list=list(self.llm_state.vote_list),
             strategy_memo=self.llm_state.strategy_memo,
             suspicion=dict(self.llm_state.suspicion),
+            emotional_state=self.llm_state.emotional_state,
+            relationships=dict(self.llm_state.relationships),
             remain_count=self.info.remain_count if self.info else None,
             remain_length=self.info.remain_length if self.info else None,
         )
+
+    def _log_llm_debug(self, action_name: str, result: Any, elapsed_ms: float) -> None:  # noqa: ANN401
+        """Log debug information from an LLM call.
+
+        LLM呼び出しのデバッグ情報をログ出力する.
+
+        Args:
+            action_name: Name of the action (talk/whisper/vote/divine/guard/attack) / アクション名
+            result: AgentRunResult from Pydantic AI / Pydantic AIの実行結果
+            elapsed_ms: Elapsed time in milliseconds / 経過時間(ミリ秒)
+        """
+        if not bool(self.config.get("llm", {}).get("debug", False)):
+            return
+
+        logger = self.agent_logger.logger
+
+        # 経過時間とモデル情報
+        logger.debug("[LLM:%s] elapsed=%.0fms", action_name, elapsed_ms)
+
+        # トークン使用量
+        usage = result.usage()
+        logger.debug(
+            "[LLM:%s] tokens: input=%d output=%d requests=%d",
+            action_name,
+            usage.input_tokens,
+            usage.output_tokens,
+            usage.requests,
+        )
+
+        # メッセージ履歴からツール呼び出しを抽出
+        messages = result.all_messages()
+        tool_calls: list[str] = [
+            f"{part.tool_name}({part.args})"
+            for msg in messages
+            if hasattr(msg, "parts")
+            for part in msg.parts
+            if hasattr(part, "tool_name") and hasattr(part, "args")
+        ]
+
+        logger.debug("[LLM:%s] message_count=%d", action_name, len(messages))
+        logger.debug("[LLM:%s] tool_calls: %s", action_name, tool_calls or "none")
+
+        # 構造化出力の要約
+        output = result.output
+        for field_name in (
+            "thought",
+            "utterance",
+            "reason",
+            "target",
+            "strategy_memo",
+            "suspicion",
+            "emotional_state",
+            "relationships",
+        ):
+            if hasattr(output, field_name):
+                logger.debug("[LLM:%s] %s: %s", action_name, field_name, getattr(output, field_name))
 
     def _llm_talk(self) -> str:
         """Call LLM talk agent for conversation.
@@ -234,19 +293,22 @@ class Agent:
         self.llm_state.reset_if_new_day(day)
 
         model = str(self.config["llm"]["model"])
+        t0 = time.perf_counter()
         result = talk_agent.run_sync(
             "あなたの番です。発言してください。",
             deps=ctx,
             model=model,
             message_history=self.llm_state.talk_message_history,  # type: ignore[arg-type]
         )
+        elapsed_ms = (time.perf_counter() - t0) * 1000
 
         self.llm_state.talk_message_history = list(result.all_messages())  # type: ignore[assignment]
         self.llm_state.strategy_memo = result.output.strategy_memo
         self.llm_state.suspicion = dict(result.output.suspicion)
+        self.llm_state.emotional_state = result.output.emotional_state
+        self.llm_state.relationships = dict(result.output.relationships)
 
-        self.agent_logger.logger.info("LLM thought: %s", result.output.thought)
-        self.agent_logger.logger.info("LLM memo: %s", result.output.strategy_memo)
+        self._log_llm_debug("talk", result, elapsed_ms)
 
         return result.output.utterance
 
@@ -265,18 +327,22 @@ class Agent:
         self.llm_state.reset_if_new_day(day)
 
         model = str(self.config["llm"]["model"])
+        t0 = time.perf_counter()
         result = talk_agent.run_sync(
             "人狼同士の囁きです。仲間と戦略を相談してください。",
             deps=ctx,
             model=model,
             message_history=self.llm_state.whisper_message_history,  # type: ignore[arg-type]
         )
+        elapsed_ms = (time.perf_counter() - t0) * 1000
 
         self.llm_state.whisper_message_history = list(result.all_messages())  # type: ignore[assignment]
         self.llm_state.strategy_memo = result.output.strategy_memo
         self.llm_state.suspicion = dict(result.output.suspicion)
+        self.llm_state.emotional_state = result.output.emotional_state
+        self.llm_state.relationships = dict(result.output.relationships)
 
-        self.agent_logger.logger.info("LLM whisper thought: %s", result.output.thought)
+        self._log_llm_debug("whisper", result, elapsed_ms)
 
         return result.output.utterance
 
@@ -300,17 +366,20 @@ class Agent:
         model = str(self.config["llm"]["model"])
         user_prompt = get_action_user_prompt(action_type, self.role.value)
 
+        t0 = time.perf_counter()
         result = action_agent.run_sync(
             user_prompt,
             deps=ctx,
             model=model,
         )
+        elapsed_ms = (time.perf_counter() - t0) * 1000
 
         self.llm_state.strategy_memo = result.output.strategy_memo
         self.llm_state.suspicion = dict(result.output.suspicion)
+        self.llm_state.emotional_state = result.output.emotional_state
+        self.llm_state.relationships = dict(result.output.relationships)
 
-        self.agent_logger.logger.info("LLM %s reason: %s", action_type, result.output.reason)
-        self.agent_logger.logger.info("LLM %s target: %s", action_type, result.output.target)
+        self._log_llm_debug(action_type, result, elapsed_ms)
 
         target = result.output.target
         if target not in self.get_alive_agents():
